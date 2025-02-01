@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
+const fs = require('fs');
 const path = require('path');
 const { version } = require('./package.json');
+const { withAxiom } = require('next-axiom');
 
 const ENV_FILES = ['.env', '.env.local', `.env.${process.env.NODE_ENV || 'development'}`];
 
@@ -10,22 +12,42 @@ ENV_FILES.forEach((file) => {
   });
 });
 
+// !: This is a temp hack to get caveat working without placing it back in the public directory.
+// !: By inlining this at build time we should be able to sign faster.
+const FONT_CAVEAT_BYTES = fs.readFileSync(
+  path.join(__dirname, '../../packages/assets/fonts/caveat.ttf'),
+);
+
+const FONT_NOTO_SANS_BYTES = fs.readFileSync(
+  path.join(__dirname, '../../packages/assets/fonts/noto-sans.ttf'),
+);
+
 /** @type {import('next').NextConfig} */
 const config = {
+  output: process.env.DOCKER_OUTPUT ? 'standalone' : undefined,
   experimental: {
-    serverActionsBodySizeLimit: '50mb',
+    outputFileTracingRoot: path.join(__dirname, '../../'),
+    serverComponentsExternalPackages: ['@node-rs/bcrypt', '@documenso/pdf-sign', 'playwright'],
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+    swcPlugins: [['@lingui/swc-plugin', {}]],
   },
   reactStrictMode: true,
   transpilePackages: [
+    '@documenso/assets',
+    '@documenso/ee',
     '@documenso/lib',
     '@documenso/prisma',
+    '@documenso/tailwind-config',
     '@documenso/trpc',
     '@documenso/ui',
-    '@documenso/email',
   ],
   env: {
     APP_VERSION: version,
     NEXT_PUBLIC_PROJECT: 'web',
+    FONT_CAVEAT_URI: `data:font/ttf;base64,${FONT_CAVEAT_BYTES.toString('base64')}`,
+    FONT_NOTO_SANS_URI: `data:font/ttf;base64,${FONT_NOTO_SANS_BYTES.toString('base64')}`,
   },
   modularizeImports: {
     'lucide-react': {
@@ -37,6 +59,13 @@ const config = {
     if (isServer) {
       config.resolve.alias.canvas = false;
     }
+
+    config.module.rules.push({
+      test: /\.po$/,
+      use: {
+        loader: '@lingui/loader',
+      },
+    });
 
     return config;
   },
@@ -76,4 +105,4 @@ const config = {
   },
 };
 
-module.exports = config;
+module.exports = withAxiom(config);
