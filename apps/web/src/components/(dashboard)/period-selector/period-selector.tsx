@@ -4,6 +4,8 @@ import { useMemo } from 'react';
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
+import { Trans } from '@lingui/macro';
+
 import {
   Select,
   SelectContent,
@@ -21,9 +23,9 @@ export const PeriodSelector = () => {
   const router = useRouter();
 
   const period = useMemo(() => {
-    const p = searchParams?.get('period') ?? '';
+    const p = searchParams?.get('period') ?? 'all';
 
-    return isPeriodSelectorValue(p) ? p : '';
+    return isPeriodSelectorValue(p) ? p : 'all';
   }, [searchParams]);
 
   const onPeriodChange = (newPeriod: string) => {
@@ -35,7 +37,7 @@ export const PeriodSelector = () => {
 
     params.set('period', newPeriod);
 
-    if (newPeriod === '') {
+    if (newPeriod === '' || newPeriod === 'all') {
       params.delete('period');
     }
 
@@ -49,10 +51,18 @@ export const PeriodSelector = () => {
       </SelectTrigger>
 
       <SelectContent position="popper">
-        <SelectItem value="">All Time</SelectItem>
-        <SelectItem value="7d">Last 7 days</SelectItem>
-        <SelectItem value="14d">Last 14 days</SelectItem>
-        <SelectItem value="30d">Last 30 days</SelectItem>
+        <SelectItem value="all">
+          <Trans>All Time</Trans>
+        </SelectItem>
+        <SelectItem value="7d">
+          <Trans>Last 7 days</Trans>
+        </SelectItem>
+        <SelectItem value="14d">
+          <Trans>Last 14 days</Trans>
+        </SelectItem>
+        <SelectItem value="30d">
+          <Trans>Last 30 days</Trans>
+        </SelectItem>
       </SelectContent>
     </Select>
   );

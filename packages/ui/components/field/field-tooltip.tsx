@@ -1,17 +1,18 @@
 import { TooltipArrow } from '@radix-ui/react-tooltip';
-import { VariantProps, cva } from 'class-variance-authority';
+import type { VariantProps } from 'class-variance-authority';
+import { cva } from 'class-variance-authority';
 import { createPortal } from 'react-dom';
 
 import { useFieldPageCoords } from '@documenso/lib/client-only/hooks/use-field-page-coords';
-import { cn } from '@documenso/ui/lib/utils';
+
+import { cn } from '../..//lib/utils';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@documenso/ui/primitives/tooltip';
-
-import { Field } from '.prisma/client';
+} from '../..//primitives/tooltip';
+import type { Field } from '.prisma/client';
 
 const tooltipVariants = cva('font-semibold', {
   variants: {
@@ -39,7 +40,7 @@ export function FieldToolTip({ children, color, className = '', field }: FieldTo
 
   return createPortal(
     <div
-      className={cn('absolute')}
+      className={cn('pointer-events-none absolute')}
       style={{
         top: `${coords.y}px`,
         left: `${coords.x}px`,
@@ -48,7 +49,7 @@ export function FieldToolTip({ children, color, className = '', field }: FieldTo
       }}
     >
       <TooltipProvider>
-        <Tooltip delayDuration={0} open={!field.inserted}>
+        <Tooltip delayDuration={0} open={!field.inserted || !field.fieldMeta}>
           <TooltipTrigger className="absolute inset-0 w-full"></TooltipTrigger>
 
           <TooltipContent className={tooltipVariants({ color, className })} sideOffset={2}>

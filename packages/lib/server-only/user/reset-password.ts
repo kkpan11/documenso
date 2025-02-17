@@ -1,18 +1,22 @@
-import { compare, hash } from 'bcrypt';
+import { compare, hash } from '@node-rs/bcrypt';
 
 import { prisma } from '@documenso/prisma';
+import { UserSecurityAuditLogType } from '@documenso/prisma/client';
 
 import { SALT_ROUNDS } from '../../constants/auth';
+import { AppError, AppErrorCode } from '../../errors/app-error';
+import type { RequestMetadata } from '../../universal/extract-request-metadata';
 import { sendResetPassword } from '../auth/send-reset-password';
 
 export type ResetPasswordOptions = {
   token: string;
   password: string;
+  requestMetadata?: RequestMetadata;
 };
 
-export const resetPassword = async ({ token, password }: ResetPasswordOptions) => {
+export const resetPassword = async ({ token, password, requestMetadata }: ResetPasswordOptions) => {
   if (!token) {
-    throw new Error('Invalid token provided. Please try again.');
+    throw new AppError('INVALID_TOKEN');
   }
 
   const foundToken = await prisma.passwordResetToken.findFirst({
@@ -20,24 +24,24 @@ export const resetPassword = async ({ token, password }: ResetPasswordOptions) =
       token,
     },
     include: {
-      User: true,
+      user: true,
     },
   });
 
   if (!foundToken) {
-    throw new Error('Invalid token provided. Please try again.');
+    throw new AppError('INVALID_TOKEN');
   }
 
   const now = new Date();
 
   if (now > foundToken.expiry) {
-    throw new Error('Token has expired. Please try again.');
+    throw new AppError(AppErrorCode.EXPIRED_CODE);
   }
 
-  const isSamePassword = await compare(password, foundToken.User.password || '');
+  const isSamePassword = await compare(password, foundToken.user.password || '');
 
   if (isSamePassword) {
-    throw new Error('Your new password cannot be the same as your old password.');
+    throw new AppError('SAME_PASSWORD');
   }
 
   const hashedPassword = await hash(password, SALT_ROUNDS);
@@ -54,6 +58,14 @@ export const resetPassword = async ({ token, password }: ResetPasswordOptions) =
     prisma.passwordResetToken.deleteMany({
       where: {
         userId: foundToken.userId,
+      },
+    }),
+    prisma.userSecurityAuditLog.create({
+      data: {
+        userId: foundToken.userId,
+        type: UserSecurityAuditLogType.PASSWORD_RESET,
+        userAgent: requestMetadata?.userAgent,
+        ipAddress: requestMetadata?.ipAddress,
       },
     }),
   ]);

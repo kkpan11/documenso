@@ -1,16 +1,28 @@
 import { prisma } from '@documenso/prisma';
+import { DocumentSource, type Prisma } from '@documenso/prisma/client';
 
-export interface DuplicateDocumentByIdOptions {
-  id: number;
+import { AppError, AppErrorCode } from '../../errors/app-error';
+import { getDocumentWhereInput } from './get-document-by-id';
+
+export interface DuplicateDocumentOptions {
+  documentId: number;
   userId: number;
+  teamId?: number;
 }
 
-export const duplicateDocumentById = async ({ id, userId }: DuplicateDocumentByIdOptions) => {
-  const document = await prisma.document.findUniqueOrThrow({
-    where: {
-      id,
-      userId: userId,
-    },
+export const duplicateDocument = async ({
+  documentId,
+  userId,
+  teamId,
+}: DuplicateDocumentOptions) => {
+  const documentWhereInput = await getDocumentWhereInput({
+    documentId,
+    userId,
+    teamId,
+  });
+
+  const document = await prisma.document.findFirst({
+    where: documentWhereInput,
     select: {
       title: true,
       userId: true,
@@ -25,15 +37,25 @@ export const duplicateDocumentById = async ({ id, userId }: DuplicateDocumentByI
         select: {
           message: true,
           subject: true,
+          dateFormat: true,
+          password: true,
+          timezone: true,
+          redirectUrl: true,
         },
       },
     },
   });
 
-  const createdDocument = await prisma.document.create({
+  if (!document) {
+    throw new AppError(AppErrorCode.NOT_FOUND, {
+      message: 'Document not found',
+    });
+  }
+
+  const createDocumentArguments: Prisma.DocumentCreateArgs = {
     data: {
       title: document.title,
-      User: {
+      user: {
         connect: {
           id: document.userId,
         },
@@ -49,8 +71,21 @@ export const duplicateDocumentById = async ({ id, userId }: DuplicateDocumentByI
           ...document.documentMeta,
         },
       },
+      source: DocumentSource.DOCUMENT,
     },
-  });
+  };
 
-  return createdDocument.id;
+  if (teamId !== undefined) {
+    createDocumentArguments.data.team = {
+      connect: {
+        id: teamId,
+      },
+    };
+  }
+
+  const createdDocument = await prisma.document.create(createDocumentArguments);
+
+  return {
+    documentId: createdDocument.id,
+  };
 };

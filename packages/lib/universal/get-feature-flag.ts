@@ -1,9 +1,7 @@
 import { z } from 'zod';
 
-import {
-  TFeatureFlagValue,
-  ZFeatureFlagValueSchema,
-} from '@documenso/lib/client-only/providers/feature-flag.types';
+import type { TFeatureFlagValue } from '@documenso/lib/client-only/providers/feature-flag.types';
+import { ZFeatureFlagValueSchema } from '@documenso/lib/client-only/providers/feature-flag.types';
 import { APP_BASE_URL } from '@documenso/lib/constants/app';
 import { LOCAL_FEATURE_FLAGS, isFeatureFlagEnabled } from '@documenso/lib/constants/feature-flags';
 
@@ -19,15 +17,16 @@ export const getFlag = async (
   options?: GetFlagOptions,
 ): Promise<TFeatureFlagValue> => {
   const requestHeaders = options?.requestHeaders ?? {};
+  delete requestHeaders['content-length'];
 
   if (!isFeatureFlagEnabled()) {
     return LOCAL_FEATURE_FLAGS[flag] ?? true;
   }
 
-  const url = new URL(`${APP_BASE_URL}/api/feature-flag/get`);
+  const url = new URL(`${APP_BASE_URL()}/api/feature-flag/get`);
   url.searchParams.set('flag', flag);
 
-  const response = await fetch(url, {
+  return await fetch(url, {
     headers: {
       ...requestHeaders,
     },
@@ -37,9 +36,10 @@ export const getFlag = async (
   })
     .then(async (res) => res.json())
     .then((res) => ZFeatureFlagValueSchema.parse(res))
-    .catch(() => false);
-
-  return response;
+    .catch((err) => {
+      console.error(err);
+      return LOCAL_FEATURE_FLAGS[flag] ?? false;
+    });
 };
 
 /**
@@ -52,12 +52,13 @@ export const getAllFlags = async (
   options?: GetFlagOptions,
 ): Promise<Record<string, TFeatureFlagValue>> => {
   const requestHeaders = options?.requestHeaders ?? {};
+  delete requestHeaders['content-length'];
 
   if (!isFeatureFlagEnabled()) {
     return LOCAL_FEATURE_FLAGS;
   }
 
-  const url = new URL(`${APP_BASE_URL}/api/feature-flag/all`);
+  const url = new URL(`${APP_BASE_URL()}/api/feature-flag/all`);
 
   return fetch(url, {
     headers: {
@@ -69,7 +70,10 @@ export const getAllFlags = async (
   })
     .then(async (res) => res.json())
     .then((res) => z.record(z.string(), ZFeatureFlagValueSchema).parse(res))
-    .catch(() => LOCAL_FEATURE_FLAGS);
+    .catch((err) => {
+      console.error(err);
+      return LOCAL_FEATURE_FLAGS;
+    });
 };
 
 /**
@@ -82,7 +86,7 @@ export const getAllAnonymousFlags = async (): Promise<Record<string, TFeatureFla
     return LOCAL_FEATURE_FLAGS;
   }
 
-  const url = new URL(`${APP_BASE_URL}/api/feature-flag/all`);
+  const url = new URL(`${APP_BASE_URL()}/api/feature-flag/all`);
 
   return fetch(url, {
     next: {
@@ -91,7 +95,10 @@ export const getAllAnonymousFlags = async (): Promise<Record<string, TFeatureFla
   })
     .then(async (res) => res.json())
     .then((res) => z.record(z.string(), ZFeatureFlagValueSchema).parse(res))
-    .catch(() => LOCAL_FEATURE_FLAGS);
+    .catch((err) => {
+      console.error(err);
+      return LOCAL_FEATURE_FLAGS;
+    });
 };
 
 interface GetFlagOptions {

@@ -7,12 +7,17 @@ import { LimitsProvider as ClientLimitsProvider } from './client';
 
 export type LimitsProviderProps = {
   children?: React.ReactNode;
+  teamId?: number;
 };
 
-export const LimitsProvider = async ({ children }: LimitsProviderProps) => {
+export const LimitsProvider = async ({ children, teamId }: LimitsProviderProps) => {
   const requestHeaders = Object.fromEntries(headers().entries());
 
-  const limits = await getLimits({ headers: requestHeaders });
+  const limits = await getLimits({ headers: requestHeaders, teamId });
 
-  return <ClientLimitsProvider initialValue={limits}>{children}</ClientLimitsProvider>;
+  return (
+    <ClientLimitsProvider initialValue={limits} teamId={teamId}>
+      {children}
+    </ClientLimitsProvider>
+  );
 };

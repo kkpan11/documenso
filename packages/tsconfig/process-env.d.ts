@@ -6,17 +6,25 @@ declare namespace NodeJS {
     NEXT_PRIVATE_GOOGLE_CLIENT_ID?: string;
     NEXT_PRIVATE_GOOGLE_CLIENT_SECRET?: string;
 
+    NEXT_PRIVATE_OIDC_WELL_KNOWN?: string;
+    NEXT_PRIVATE_OIDC_CLIENT_ID?: string;
+    NEXT_PRIVATE_OIDC_CLIENT_SECRET?: string;
+    NEXT_PRIVATE_OIDC_PROVIDER_LABEL?: string;
+    NEXT_PRIVATE_OIDC_ALLOW_SIGNUP?: string;
+    NEXT_PRIVATE_OIDC_SKIP_VERIFY?: string;
+
     NEXT_PRIVATE_DATABASE_URL: string;
+    NEXT_PRIVATE_ENCRYPTION_KEY: string;
+    NEXT_PRIVATE_ENCRYPTION_SECONDARY_KEY: string;
 
     NEXT_PUBLIC_STRIPE_COMMUNITY_PLAN_MONTHLY_PRICE_ID: string;
-    NEXT_PUBLIC_STRIPE_COMMUNITY_PLAN_YEARLY_PRICE_ID: string;
-    NEXT_PUBLIC_STRIPE_FREE_PLAN_ID?: string;
 
     NEXT_PRIVATE_STRIPE_API_KEY: string;
     NEXT_PRIVATE_STRIPE_WEBHOOK_SECRET: string;
 
     NEXT_PUBLIC_UPLOAD_TRANSPORT?: 'database' | 's3';
     NEXT_PRIVATE_UPLOAD_ENDPOINT?: string;
+    NEXT_PRIVATE_UPLOAD_FORCE_PATH_STYLE?: string;
     NEXT_PRIVATE_UPLOAD_REGION?: string;
     NEXT_PRIVATE_UPLOAD_BUCKET?: string;
     NEXT_PRIVATE_UPLOAD_ACCESS_KEY_ID?: string;
@@ -30,6 +38,10 @@ declare namespace NodeJS {
     NEXT_PRIVATE_SIGNING_LOCAL_FILE_PATH?: string;
     NEXT_PRIVATE_SIGNING_LOCAL_FILE_CONTENTS?: string;
     NEXT_PRIVATE_SIGNING_LOCAL_FILE_ENCODING?: string;
+    NEXT_PRIVATE_SIGNING_GCLOUD_HSM_KEY_PATH?: string;
+    NEXT_PRIVATE_SIGNING_GCLOUD_HSM_PUBLIC_CRT_FILE_PATH?: string;
+    NEXT_PRIVATE_SIGNING_GCLOUD_HSM_PUBLIC_CRT_FILE_CONTENTS?: string;
+    NEXT_PRIVATE_SIGNING_GCLOUD_APPLICATION_CREDENTIALS_CONTENTS?: string;
 
     NEXT_PRIVATE_SMTP_TRANSPORT?: 'mailchannels' | 'resend' | 'smtp-auth' | 'smtp-api';
 
@@ -50,9 +62,33 @@ declare namespace NodeJS {
     NEXT_PRIVATE_SMTP_APIKEY?: string;
 
     NEXT_PRIVATE_SMTP_SECURE?: string;
+    NEXT_PRIVATE_SMTP_UNSAFE_IGNORE_TLS?: string;
 
     NEXT_PRIVATE_SMTP_FROM_NAME?: string;
     NEXT_PRIVATE_SMTP_FROM_ADDRESS?: string;
+
+    NEXT_PUBLIC_DISABLE_SIGNUP?: string;
+
+    //
+    NEXT_PRIVATE_BROWSERLESS_URL?: string;
+
+    NEXT_PRIVATE_JOBS_PROVIDER?: 'trigger' | 'inngest' | 'local';
+
+    /**
+     * Trigger.dev environment variables
+     */
+    NEXT_PRIVATE_TRIGGER_API_KEY?: string;
+    NEXT_PRIVATE_TRIGGER_API_URL?: string;
+
+    /**
+     * Inngest environment variables
+     */
+    INNGEST_EVENT_KEY?: string;
+    INNGEST_SIGNING_KEY?: string;
+    NEXT_PRIVATE_INNGEST_APP_ID?: string;
+    NEXT_PRIVATE_INNGEST_EVENT_KEY?: string;
+
+    NEXT_PRIVATE_LOGGER_HONEY_BADGER_API_KEY?: string;
 
     /**
      * Vercel environment variables
@@ -62,6 +98,8 @@ declare namespace NodeJS {
     VERCEL_URL?: string;
 
     DEPLOYMENT_TARGET?: 'webapp' | 'marketing';
+    FONT_CAVEAT_URI: string;
+    FONT_NOTO_SANS_URI: string;
 
     POSTGRES_URL?: string;
     DATABASE_URL?: string;
