@@ -1,19 +1,13 @@
 import * as React from 'react';
 
-import * as LabelPrimitive from '@radix-ui/react-label';
+import { useLingui } from '@lingui/react';
+import type * as LabelPrimitive from '@radix-ui/react-label';
 import { Slot } from '@radix-ui/react-slot';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  Controller,
-  ControllerProps,
-  FieldPath,
-  FieldValues,
-  FormProvider,
-  useFormContext,
-} from 'react-hook-form';
+import type { ControllerProps, FieldPath, FieldValues } from 'react-hook-form';
+import { Controller, FormProvider, useFormContext } from 'react-hook-form';
 
-import { cn } from '@documenso/ui/lib/utils';
-
+import { cn } from '../../lib/utils';
 import { Label } from '../label';
 
 const Form = FormProvider;
@@ -143,11 +137,19 @@ const FormMessage = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, children, ...props }, ref) => {
+  const { i18n } = useLingui();
+
   const { error, formMessageId } = useFormField();
-  const body = error ? String(error?.message) : children;
+
+  let body = error ? String(error?.message) : children;
 
   if (!body) {
     return null;
+  }
+
+  // Checks to see if there's a translation for the string, since we're passing IDs for Zod errors.
+  if (typeof body === 'string' && i18n.t(body)) {
+    body = i18n.t(body);
   }
 
   return (
