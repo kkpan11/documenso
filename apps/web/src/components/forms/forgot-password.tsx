@@ -3,15 +3,23 @@
 import { useRouter } from 'next/navigation';
 
 import { zodResolver } from '@hookform/resolvers/zod';
+import { Trans, msg } from '@lingui/macro';
+import { useLingui } from '@lingui/react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
 import { trpc } from '@documenso/trpc/react';
 import { cn } from '@documenso/ui/lib/utils';
 import { Button } from '@documenso/ui/primitives/button';
-import { FormErrorMessage } from '@documenso/ui/primitives/form/form-error-message';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@documenso/ui/primitives/form/form';
 import { Input } from '@documenso/ui/primitives/input';
-import { Label } from '@documenso/ui/primitives/label';
 import { useToast } from '@documenso/ui/primitives/use-toast';
 
 export const ZForgotPasswordFormSchema = z.object({
@@ -25,20 +33,19 @@ export type ForgotPasswordFormProps = {
 };
 
 export const ForgotPasswordForm = ({ className }: ForgotPasswordFormProps) => {
-  const router = useRouter();
+  const { _ } = useLingui();
   const { toast } = useToast();
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<TForgotPasswordFormSchema>({
+  const router = useRouter();
+
+  const form = useForm<TForgotPasswordFormSchema>({
     values: {
       email: '',
     },
     resolver: zodResolver(ZForgotPasswordFormSchema),
   });
+
+  const isSubmitting = form.formState.isSubmitting;
 
   const { mutateAsync: forgotPassword } = trpc.profile.forgotPassword.useMutation();
 
@@ -46,35 +53,46 @@ export const ForgotPasswordForm = ({ className }: ForgotPasswordFormProps) => {
     await forgotPassword({ email }).catch(() => null);
 
     toast({
-      title: 'Reset email sent',
-      description:
-        'A password reset email has been sent, if you have an account you should see it in your inbox shortly.',
+      title: _(msg`Reset email sent`),
+      description: _(
+        msg`A password reset email has been sent, if you have an account you should see it in your inbox shortly.`,
+      ),
       duration: 5000,
     });
 
-    reset();
+    form.reset();
 
     router.push('/check-email');
   };
 
   return (
-    <form
-      className={cn('flex w-full flex-col gap-y-4', className)}
-      onSubmit={handleSubmit(onFormSubmit)}
-    >
-      <div>
-        <Label htmlFor="email" className="text-muted-foreground">
-          Email
-        </Label>
+    <Form {...form}>
+      <form
+        className={cn('flex w-full flex-col gap-y-4', className)}
+        onSubmit={form.handleSubmit(onFormSubmit)}
+      >
+        <fieldset className="flex w-full flex-col gap-y-4" disabled={isSubmitting}>
+          <FormField
+            control={form.control}
+            name="email"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>
+                  <Trans>Email</Trans>
+                </FormLabel>
+                <FormControl>
+                  <Input type="email" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </fieldset>
 
-        <Input id="email" type="email" className="bg-background mt-2" {...register('email')} />
-
-        <FormErrorMessage className="mt-1.5" error={errors.email} />
-      </div>
-
-      <Button size="lg" loading={isSubmitting}>
-        {isSubmitting ? 'Sending Reset Email...' : 'Reset Password'}
-      </Button>
-    </form>
+        <Button size="lg" loading={isSubmitting}>
+          {isSubmitting ? <Trans>Sending Reset Email...</Trans> : <Trans>Reset Password</Trans>}
+        </Button>
+      </form>
+    </Form>
   );
 };

@@ -1,5 +1,5 @@
 import { trpc } from '@documenso/trpc/react';
-import { TCreateOrGetShareLinkMutationSchema } from '@documenso/trpc/server/share-link-router/schema';
+import type { TCreateOrGetShareLinkMutationSchema } from '@documenso/trpc/server/share-link-router/schema';
 
 import { useCopyToClipboard } from './use-copy-to-clipboard';
 
@@ -11,7 +11,7 @@ export type UseCopyShareLinkOptions = {
 export function useCopyShareLink({ onSuccess, onError }: UseCopyShareLinkOptions) {
   const [, copyToClipboard] = useCopyToClipboard();
 
-  const { mutateAsync: createOrGetShareLink, isLoading: isCreatingShareLink } =
+  const { mutateAsync: createOrGetShareLink, isPending: isCreatingShareLink } =
     trpc.shareLink.createOrGetShareLink.useMutation();
 
   /**

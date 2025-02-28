@@ -1,43 +1,75 @@
-import { createElement } from 'react';
-
-import { mailer } from '@documenso/email/mailer';
-import { render } from '@documenso/email/render';
-import { DocumentInviteEmailTemplate } from '@documenso/email/templates/document-invite';
-import { FROM_ADDRESS, FROM_NAME } from '@documenso/lib/constants/email';
-import { renderCustomEmailTemplate } from '@documenso/lib/utils/render-custom-email-template';
+import { DOCUMENT_AUDIT_LOG_TYPE } from '@documenso/lib/types/document-audit-logs';
+import type { ApiRequestMetadata } from '@documenso/lib/universal/extract-request-metadata';
+import { putPdfFile } from '@documenso/lib/universal/upload/put-file';
+import { createDocumentAuditLogData } from '@documenso/lib/utils/document-audit-logs';
 import { prisma } from '@documenso/prisma';
-import { DocumentStatus, SendStatus } from '@documenso/prisma/client';
+import {
+  DocumentSigningOrder,
+  DocumentStatus,
+  RecipientRole,
+  SendStatus,
+  SigningStatus,
+  WebhookTriggerEvents,
+} from '@documenso/prisma/client';
+
+import { jobs } from '../../jobs/client';
+import { extractDerivedDocumentEmailSettings } from '../../types/document-email';
+import {
+  ZWebhookDocumentSchema,
+  mapDocumentToWebhookDocumentPayload,
+} from '../../types/webhook-payload';
+import { getFile } from '../../universal/upload/get-file';
+import { insertFormValuesInPdf } from '../pdf/insert-form-values-in-pdf';
+import { triggerWebhook } from '../webhooks/trigger/trigger-webhook';
 
 export type SendDocumentOptions = {
   documentId: number;
   userId: number;
+  teamId?: number;
+  sendEmail?: boolean;
+  requestMetadata: ApiRequestMetadata;
 };
 
-export const sendDocument = async ({ documentId, userId }: SendDocumentOptions) => {
-  const user = await prisma.user.findFirstOrThrow({
-    where: {
-      id: userId,
-    },
-  });
-
+export const sendDocument = async ({
+  documentId,
+  userId,
+  teamId,
+  sendEmail,
+  requestMetadata,
+}: SendDocumentOptions) => {
   const document = await prisma.document.findUnique({
     where: {
       id: documentId,
-      userId,
+      ...(teamId
+        ? {
+            team: {
+              id: teamId,
+              members: {
+                some: {
+                  userId,
+                },
+              },
+            },
+          }
+        : {
+            userId,
+            teamId: null,
+          }),
     },
     include: {
-      Recipient: true,
+      recipients: {
+        orderBy: [{ signingOrder: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }],
+      },
       documentMeta: true,
+      documentData: true,
     },
   });
-
-  const customEmail = document?.documentMeta;
 
   if (!document) {
     throw new Error('Document not found');
   }
 
-  if (document.Recipient.length === 0) {
+  if (document.recipients.length === 0) {
     throw new Error('Document has no recipients');
   }
 
@@ -45,66 +77,169 @@ export const sendDocument = async ({ documentId, userId }: SendDocumentOptions) 
     throw new Error('Can not send completed document');
   }
 
-  await Promise.all([
-    document.Recipient.map(async (recipient) => {
-      const { email, name } = recipient;
+  const signingOrder = document.documentMeta?.signingOrder || DocumentSigningOrder.PARALLEL;
 
-      const customEmailTemplate = {
-        'signer.name': name,
-        'signer.email': email,
-        'document.name': document.title,
-      };
+  let recipientsToNotify = document.recipients;
 
-      if (recipient.sendStatus === SendStatus.SENT) {
-        return;
-      }
+  if (signingOrder === DocumentSigningOrder.SEQUENTIAL) {
+    // Get the currently active recipient.
+    recipientsToNotify = document.recipients
+      .filter((r) => r.signingStatus === SigningStatus.NOT_SIGNED && r.role !== RecipientRole.CC)
+      .slice(0, 1);
 
-      const assetBaseUrl = process.env.NEXT_PUBLIC_WEBAPP_URL || 'http://localhost:3000';
-      const signDocumentLink = `${process.env.NEXT_PUBLIC_WEBAPP_URL}/sign/${recipient.token}`;
+    // Secondary filter so we aren't resending if the current active recipient has already
+    // received the document.
+    recipientsToNotify.filter((r) => r.sendStatus !== SendStatus.SENT);
+  }
 
-      const template = createElement(DocumentInviteEmailTemplate, {
-        documentName: document.title,
-        inviterName: user.name || undefined,
-        inviterEmail: user.email,
-        assetBaseUrl,
-        signDocumentLink,
-        customBody: renderCustomEmailTemplate(customEmail?.message || '', customEmailTemplate),
+  const { documentData } = document;
+
+  if (!documentData.data) {
+    throw new Error('Document data not found');
+  }
+
+  if (document.formValues) {
+    const file = await getFile(documentData);
+
+    const prefilled = await insertFormValuesInPdf({
+      pdf: Buffer.from(file),
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      formValues: document.formValues as Record<string, string | number | boolean>,
+    });
+
+    let fileName = document.title;
+
+    if (!document.title.endsWith('.pdf')) {
+      fileName = `${document.title}.pdf`;
+    }
+
+    const newDocumentData = await putPdfFile({
+      name: fileName,
+      type: 'application/pdf',
+      arrayBuffer: async () => Promise.resolve(prefilled),
+    });
+
+    const result = await prisma.document.update({
+      where: {
+        id: document.id,
+      },
+      data: {
+        documentDataId: newDocumentData.id,
+      },
+    });
+
+    Object.assign(document, result);
+  }
+
+  // Commented out server side checks for minimum 1 signature per signer now since we need to
+  // decide if we want to enforce this for API & templates.
+  // const fields = await getFieldsForDocument({
+  //   documentId: documentId,
+  //   userId: userId,
+  // });
+
+  // const fieldsWithSignerEmail = fields.map((field) => ({
+  //   ...field,
+  //   signerEmail:
+  //     document.Recipient.find((recipient) => recipient.id === field.recipientId)?.email ?? '',
+  // }));
+
+  // const everySignerHasSignature = document?.Recipient.every(
+  //   (recipient) =>
+  //     recipient.role !== RecipientRole.SIGNER ||
+  //     fieldsWithSignerEmail.some(
+  //       (field) => field.type === 'SIGNATURE' && field.signerEmail === recipient.email,
+  //     ),
+  // );
+
+  // if (!everySignerHasSignature) {
+  //   throw new Error('Some signers have not been assigned a signature field.');
+  // }
+
+  const isRecipientSigningRequestEmailEnabled = extractDerivedDocumentEmailSettings(
+    document.documentMeta,
+  ).recipientSigningRequest;
+
+  // Only send email if one of the following is true:
+  // - It is explicitly set
+  // - The email is enabled for signing requests AND sendEmail is undefined
+  if (sendEmail || (isRecipientSigningRequestEmailEnabled && sendEmail === undefined)) {
+    await Promise.all(
+      recipientsToNotify.map(async (recipient) => {
+        if (recipient.sendStatus === SendStatus.SENT || recipient.role === RecipientRole.CC) {
+          return;
+        }
+
+        await jobs.triggerJob({
+          name: 'send.signing.requested.email',
+          payload: {
+            userId,
+            documentId,
+            recipientId: recipient.id,
+            requestMetadata: requestMetadata?.requestMetadata,
+          },
+        });
+      }),
+    );
+  }
+
+  const allRecipientsHaveNoActionToTake = document.recipients.every(
+    (recipient) =>
+      recipient.role === RecipientRole.CC || recipient.signingStatus === SigningStatus.SIGNED,
+  );
+
+  if (allRecipientsHaveNoActionToTake) {
+    await jobs.triggerJob({
+      name: 'internal.seal-document',
+      payload: {
+        documentId,
+        requestMetadata: requestMetadata?.requestMetadata,
+      },
+    });
+
+    // Keep the return type the same for the `sendDocument` method
+    return await prisma.document.findFirstOrThrow({
+      where: {
+        id: documentId,
+      },
+      include: {
+        documentMeta: true,
+        recipients: true,
+      },
+    });
+  }
+
+  const updatedDocument = await prisma.$transaction(async (tx) => {
+    if (document.status === DocumentStatus.DRAFT) {
+      await tx.documentAuditLog.create({
+        data: createDocumentAuditLogData({
+          type: DOCUMENT_AUDIT_LOG_TYPE.DOCUMENT_SENT,
+          documentId: document.id,
+          metadata: requestMetadata,
+          data: {},
+        }),
       });
+    }
 
-      await mailer.sendMail({
-        to: {
-          address: email,
-          name,
-        },
-        from: {
-          name: FROM_NAME,
-          address: FROM_ADDRESS,
-        },
-        subject: customEmail?.subject
-          ? renderCustomEmailTemplate(customEmail.subject, customEmailTemplate)
-          : 'Please sign this document',
-        html: render(template),
-        text: render(template, { plainText: true }),
-      });
+    return await tx.document.update({
+      where: {
+        id: documentId,
+      },
+      data: {
+        status: DocumentStatus.PENDING,
+      },
+      include: {
+        documentMeta: true,
+        recipients: true,
+      },
+    });
+  });
 
-      await prisma.recipient.update({
-        where: {
-          id: recipient.id,
-        },
-        data: {
-          sendStatus: SendStatus.SENT,
-        },
-      });
-    }),
-  ]);
-
-  const updatedDocument = await prisma.document.update({
-    where: {
-      id: documentId,
-    },
-    data: {
-      status: DocumentStatus.PENDING,
-    },
+  await triggerWebhook({
+    event: WebhookTriggerEvents.DOCUMENT_SENT,
+    data: ZWebhookDocumentSchema.parse(mapDocumentToWebhookDocumentPayload(updatedDocument)),
+    userId,
+    teamId,
   });
 
   return updatedDocument;

@@ -1,13 +1,17 @@
 'use client';
 
-import { HTMLAttributes, useState } from 'react';
+import type { HTMLAttributes } from 'react';
+import { useState } from 'react';
 
+import { Trans } from '@lingui/macro';
+import { useLingui } from '@lingui/react';
 import { Download } from 'lucide-react';
 
-import { getFile } from '@documenso/lib/universal/upload/get-file';
-import { DocumentData } from '@documenso/prisma/client';
-import { Button } from '@documenso/ui/primitives/button';
+import { downloadPDF } from '@documenso/lib/client-only/download-pdf';
+import type { DocumentData } from '@documenso/prisma/client';
 import { useToast } from '@documenso/ui/primitives/use-toast';
+
+import { Button } from '../../primitives/button';
 
 export type DownloadButtonProps = HTMLAttributes<HTMLButtonElement> & {
   disabled?: boolean;
@@ -22,6 +26,7 @@ export const DocumentDownloadButton = ({
   disabled,
   ...props
 }: DownloadButtonProps) => {
+  const { _ } = useLingui();
   const { toast } = useToast();
 
   const [isLoading, setIsLoading] = useState(false);
@@ -31,33 +36,21 @@ export const DocumentDownloadButton = ({
       setIsLoading(true);
 
       if (!documentData) {
+        setIsLoading(false);
         return;
       }
 
-      const bytes = await getFile(documentData);
-
-      const blob = new Blob([bytes], {
-        type: 'application/pdf',
+      await downloadPDF({ documentData, fileName }).then(() => {
+        setIsLoading(false);
       });
-
-      const link = window.document.createElement('a');
-
-      link.href = window.URL.createObjectURL(blob);
-      link.download = fileName || 'document.pdf';
-
-      link.click();
-
-      window.URL.revokeObjectURL(link.href);
     } catch (err) {
-      console.error(err);
+      setIsLoading(false);
 
       toast({
-        title: 'Error',
-        description: 'An error occurred while downloading your document.',
+        title: _('Something went wrong'),
+        description: _('An error occurred while downloading your document.'),
         variant: 'destructive',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -71,8 +64,8 @@ export const DocumentDownloadButton = ({
       loading={isLoading}
       {...props}
     >
-      <Download className="mr-2 h-5 w-5" />
-      Download
+      {!isLoading && <Download className="mr-2 h-5 w-5" />}
+      <Trans>Download</Trans>
     </Button>
   );
 };

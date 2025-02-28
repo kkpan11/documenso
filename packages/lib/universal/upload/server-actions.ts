@@ -1,5 +1,8 @@
 'use server';
 
+import { headers } from 'next/headers';
+import { NextRequest } from 'next/server';
+
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -7,10 +10,12 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 import slugify from '@sindresorhus/slugify';
+import { type JWT, getToken } from 'next-auth/jwt';
+import { env } from 'next-runtime-env';
 import path from 'node:path';
 
+import { APP_BASE_URL } from '../../constants/app';
 import { ONE_HOUR, ONE_SECOND } from '../../constants/time';
-import { getServerComponentSession } from '../../next-auth/get-server-session';
 import { alphaid } from '../id';
 
 export const getPresignPostUrl = async (fileName: string, contentType: string) => {
@@ -18,15 +23,27 @@ export const getPresignPostUrl = async (fileName: string, contentType: string) =
 
   const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
 
-  const { user } = await getServerComponentSession();
+  let token: JWT | null = null;
+
+  try {
+    const baseUrl = APP_BASE_URL() ?? 'http://localhost:3000';
+
+    token = await getToken({
+      req: new NextRequest(baseUrl, {
+        headers: headers(),
+      }),
+    });
+  } catch (err) {
+    // Non server-component environment
+  }
 
   // Get the basename and extension for the file
   const { name, ext } = path.parse(fileName);
 
   let key = `${alphaid(12)}/${slugify(name)}${ext}`;
 
-  if (user) {
-    key = `${user.id}/${key}`;
+  if (token) {
+    key = `${token.id}/${key}`;
   }
 
   const putObjectCommand = new PutObjectCommand({
@@ -103,7 +120,9 @@ export const deleteS3File = async (key: string) => {
 };
 
 const getS3Client = () => {
-  if (process.env.NEXT_PUBLIC_UPLOAD_TRANSPORT !== 's3') {
+  const NEXT_PUBLIC_UPLOAD_TRANSPORT = env('NEXT_PUBLIC_UPLOAD_TRANSPORT');
+
+  if (NEXT_PUBLIC_UPLOAD_TRANSPORT !== 's3') {
     throw new Error('Invalid upload transport');
   }
 
@@ -113,6 +132,7 @@ const getS3Client = () => {
 
   return new S3Client({
     endpoint: process.env.NEXT_PRIVATE_UPLOAD_ENDPOINT || undefined,
+    forcePathStyle: process.env.NEXT_PRIVATE_UPLOAD_FORCE_PATH_STYLE === 'true',
     region: process.env.NEXT_PRIVATE_UPLOAD_REGION || 'us-east-1',
     credentials: hasCredentials
       ? {

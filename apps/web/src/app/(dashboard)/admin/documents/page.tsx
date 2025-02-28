@@ -1,28 +1,20 @@
-import { findDocuments } from '@documenso/lib/server-only/admin/get-all-documents';
+import { Trans } from '@lingui/macro';
 
-import { DocumentsDataTable } from './data-table';
+import { setupI18nSSR } from '@documenso/lib/client-only/providers/i18n.server';
 
-export type DocumentsPageProps = {
-  searchParams?: {
-    page?: string;
-    perPage?: string;
-  };
-};
+import { AdminDocumentResults } from './document-results';
 
-export default async function Documents({ searchParams = {} }: DocumentsPageProps) {
-  const page = Number(searchParams.page) || 1;
-  const perPage = Number(searchParams.perPage) || 20;
-
-  const results = await findDocuments({
-    page,
-    perPage,
-  });
+export default async function AdminDocumentsPage() {
+  await setupI18nSSR();
 
   return (
     <div>
-      <h2 className="text-4xl font-semibold">Manage documents</h2>
+      <h2 className="text-4xl font-semibold">
+        <Trans>Manage documents</Trans>
+      </h2>
+
       <div className="mt-8">
-        <DocumentsDataTable results={results} />
+        <AdminDocumentResults />
       </div>
     </div>
   );

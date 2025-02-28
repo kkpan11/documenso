@@ -1,19 +1,40 @@
-import { getRequiredServerComponentSession } from '@documenso/lib/next-auth/get-server-session';
+import type { Metadata } from 'next';
 
+import { msg } from '@lingui/macro';
+import { useLingui } from '@lingui/react';
+
+import { setupI18nSSR } from '@documenso/lib/client-only/providers/i18n.server';
+import { getRequiredServerComponentSession } from '@documenso/lib/next-auth/get-server-component-session';
+
+import { SettingsHeader } from '~/components/(dashboard)/settings/layout/header';
+import { AvatarImageForm } from '~/components/forms/avatar-image';
 import { ProfileForm } from '~/components/forms/profile';
 
+import { DeleteAccountDialog } from './delete-account-dialog';
+
+export const metadata: Metadata = {
+  title: 'Profile',
+};
+
 export default async function ProfileSettingsPage() {
+  await setupI18nSSR();
+
+  const { _ } = useLingui();
   const { user } = await getRequiredServerComponentSession();
 
   return (
     <div>
-      <h3 className="text-lg font-medium">Profile</h3>
+      <SettingsHeader
+        title={_(msg`Profile`)}
+        subtitle={_(msg`Here you can edit your personal details.`)}
+      />
 
-      <p className="text-muted-foreground mt-2 text-sm">Here you can edit your personal details.</p>
+      <AvatarImageForm className="mb-8 max-w-xl" user={user} />
+      <ProfileForm className="mb-8 max-w-xl" user={user} />
 
-      <hr className="my-4" />
+      <hr className="my-4 max-w-xl" />
 
-      <ProfileForm user={user} className="max-w-xl" />
+      <DeleteAccountDialog className="max-w-xl" user={user} />
     </div>
   );
 }

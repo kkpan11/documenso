@@ -1,19 +1,24 @@
-import { compare, hash } from 'bcrypt';
+import { compare, hash } from '@node-rs/bcrypt';
 
+import { SALT_ROUNDS } from '@documenso/lib/constants/auth';
+import type { RequestMetadata } from '@documenso/lib/universal/extract-request-metadata';
 import { prisma } from '@documenso/prisma';
+import { UserSecurityAuditLogType } from '@documenso/prisma/client';
 
-import { SALT_ROUNDS } from '../../constants/auth';
+import { AppError } from '../../errors/app-error';
 
 export type UpdatePasswordOptions = {
   userId: number;
   password: string;
   currentPassword: string;
+  requestMetadata?: RequestMetadata;
 };
 
 export const updatePassword = async ({
   userId,
   password,
   currentPassword,
+  requestMetadata,
 }: UpdatePasswordOptions) => {
   // Existence check
   const user = await prisma.user.findFirstOrThrow({
@@ -23,30 +28,39 @@ export const updatePassword = async ({
   });
 
   if (!user.password) {
-    throw new Error('User has no password');
+    throw new AppError('NO_PASSWORD');
   }
 
   const isCurrentPasswordValid = await compare(currentPassword, user.password);
   if (!isCurrentPasswordValid) {
-    throw new Error('Current password is incorrect.');
+    throw new AppError('INCORRECT_PASSWORD');
   }
 
   // Compare the new password with the old password
   const isSamePassword = await compare(password, user.password);
   if (isSamePassword) {
-    throw new Error('Your new password cannot be the same as your old password.');
+    throw new AppError('SAME_PASSWORD');
   }
 
   const hashedNewPassword = await hash(password, SALT_ROUNDS);
 
-  const updatedUser = await prisma.user.update({
-    where: {
-      id: userId,
-    },
-    data: {
-      password: hashedNewPassword,
-    },
-  });
+  return await prisma.$transaction(async (tx) => {
+    await tx.userSecurityAuditLog.create({
+      data: {
+        userId,
+        type: UserSecurityAuditLogType.PASSWORD_UPDATE,
+        userAgent: requestMetadata?.userAgent,
+        ipAddress: requestMetadata?.ipAddress,
+      },
+    });
 
-  return updatedUser;
+    return await tx.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        password: hashedNewPassword,
+      },
+    });
+  });
 };
